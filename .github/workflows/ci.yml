@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+      - name: Vet
+        run: go vet ./...
+      - name: Tests (con race, sin presupuestos de rendimiento)
+        run: go test -race -short ./...
+      - name: Presupuestos de rendimiento (solo Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: go test -run TestPerf10kBudget -v ./internal/storage/sqlindex/
+      - name: Build
+        run: go build ./cmd/pes

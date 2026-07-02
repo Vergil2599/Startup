@@ -1,0 +1,46 @@
+# Runner de build multiplataforma: https://taskfile.dev
+version: "3"
+
+vars:
+  BIN: pes
+  VERSION:
+    sh: git describe --tags --always 2>/dev/null || echo 0.1.0-dev
+
+tasks:
+  build:
+    desc: Compila el binario pes
+    cmds:
+      - go build -ldflags "-X github.com/Vergil2599/startup/pes/cmd/pes/cli.Version={{.VERSION}}" -o {{.BIN}} ./cmd/pes
+
+  test:
+    desc: Suite completa (incluye presupuestos de rendimiento)
+    cmds:
+      - go test ./...
+
+  test:short:
+    desc: Suite rápida (sin presupuestos de rendimiento)
+    cmds:
+      - go test -short ./...
+
+  test:race:
+    desc: Suite con detector de carreras
+    cmds:
+      - go test -race -short ./...
+
+  vet:
+    desc: Análisis estático
+    cmds:
+      - go vet ./...
+
+  ci:
+    desc: Todo lo que corre en CI
+    cmds:
+      - task: vet
+      - task: test:race
+      - task: test
+
+  cover:
+    desc: Cobertura con informe HTML
+    cmds:
+      - go test -coverprofile=coverage.out ./...
+      - go tool cover -html=coverage.out -o coverage.html

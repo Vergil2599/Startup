@@ -6,10 +6,32 @@ probar, versionar y reutilizar prompts para cualquier LLM, local o remoto.
 
 ## Estado del proyecto
 
-**Fase de diseño.** La arquitectura completa está documentada y pendiente de revisión
-y aprobación antes de escribir código de implementación.
+**Arquitectura aprobada — hito M0 implementado** (core engine + CLI, 100 % offline):
 
-➡️ **[Documentación de diseño (15 entregables)](docs/README.md)**
+- ✅ Dominio, Template Engine (variables `{{x}}` con filtros, herencia de plantillas)
+- ✅ Validation Engine (7 reglas deterministas, puntuación 0–100 explicable)
+- ✅ Storage: archivos MD+YAML atómicos + índice SQLite FTS5 incremental
+- ✅ Export (md/txt/json/yaml) e Import (PES-md/json/yaml/texto) con round-trip
+- ✅ CLI `pes`: `init · new · list · search · render · validate · export · import · reindex`
+- ✅ Presupuestos de rendimiento verificados en tests: 10 000 prompts →
+  indexación ~6 s, búsqueda p95 ~22 ms, sync incremental ~174 ms
+
+➡️ **[Documentación de diseño (15 entregables)](docs/README.md)** ·
+[Roadmap](docs/08-roadmap.md) (siguiente: MVP v0.1, shell Wails + Prompt Builder)
+
+## Desarrollo
+
+```bash
+go build ./cmd/pes        # compilar la CLI
+go test ./...             # suite completa (incluye presupuestos de rendimiento)
+go test -short ./...      # suite rápida
+
+# Primer uso
+./pes init -w ~/mis-prompts
+./pes new "Mi primer prompt" -w ~/mis-prompts --tags demo
+./pes validate <id> -w ~/mis-prompts
+./pes export <id> -w ~/mis-prompts -f md
+```
 
 ## Stack decidido (resumen)
 

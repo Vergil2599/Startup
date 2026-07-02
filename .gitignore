@@ -1,0 +1,16 @@
+# Binarios
+/pes
+/pes.exe
+/dist/
+
+# Go
+*.test
+*.out
+coverage.html
+
+# Workspaces de prueba locales
+/demo/
+
+# SO / editores
+.DS_Store
+*.swp
