@@ -198,3 +198,22 @@ func TestRenderDeterministicAndIdentity(t *testing.T) {
 		t.Fatalf("texto sin placeholders alterado: %q", out)
 	}
 }
+
+func TestEstimateTokens(t *testing.T) {
+	if EstimateTokens("") != 0 {
+		t.Fatal("vacío = 0")
+	}
+	// ~4 chars/token: 400 runas ≈ 100 tokens (±).
+	long := strings.Repeat("abcd", 100)
+	if got := EstimateTokens(long); got != 100 {
+		t.Fatalf("400 chars => %d tokens", got)
+	}
+	// Muchas palabras cortas: al menos un token por palabra.
+	if got := EstimateTokens("a b c d e f"); got < 6 {
+		t.Fatalf("6 palabras => %d tokens", got)
+	}
+	// Unicode cuenta por runas, no por bytes.
+	if got := EstimateTokens(strings.Repeat("ñ", 40)); got != 10 {
+		t.Fatalf("40 runas ñ => %d", got)
+	}
+}

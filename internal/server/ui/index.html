@@ -266,6 +266,7 @@ function renderBuilder(){
 async function renderPreview(){
   const r=await api('POST','/prompts/'+current.id+'/render',{strict:false});
   $('#viewBox').innerHTML=`${r.warning?`<p class="muted">⚠ ${esc(r.warning)}</p>`:''}
+    <p class="muted">≈ ${r.tokens_estimate} tokens</p>
     <pre class="preview">${esc(r.text)||'<span class="muted">(vacío)</span>'}</pre>`;
 }
 

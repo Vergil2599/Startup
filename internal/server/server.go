@@ -24,6 +24,7 @@ import (
 	"github.com/Vergil2599/startup/pes/internal/run"
 	"github.com/Vergil2599/startup/pes/internal/storage/fsrepo"
 	"github.com/Vergil2599/startup/pes/internal/storage/sqlindex"
+	"github.com/Vergil2599/startup/pes/internal/template"
 )
 
 //go:embed ui/index.html
@@ -257,7 +258,7 @@ func (s *Server) renderPrompt(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	resp := map[string]any{"text": out}
+	resp := map[string]any{"text": out, "tokens_estimate": template.EstimateTokens(out)}
 	if err != nil {
 		resp["warning"] = err.Error()
 	}

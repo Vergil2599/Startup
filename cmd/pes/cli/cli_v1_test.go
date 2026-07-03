@@ -233,3 +233,101 @@ func TestBenchCommand(t *testing.T) {
 		t.Fatalf("bench: %v\n%s", err, out)
 	}
 }
+
+func TestLintCommand(t *testing.T) {
+	ws := t.TempDir()
+	run(t, "init", "-w", ws)
+	// Un prompt bueno y uno vacío (puntuará bajo).
+	o, _ := run(t, "new", "Bueno", "-w", ws)
+	id := idRe.FindStringSubmatch(o)[1]
+	rel := filepath.Join(ws, "prompts", "bueno.md")
+	data, _ := os.ReadFile(rel)
+	edited := strings.Replace(string(data), "## @role\n", "## @role\nEres revisor senior.\n", 1)
+	edited = strings.Replace(edited, "## @objective\n", "## @objective\nDetecta 3 defectos por revisión.\n", 1)
+	edited = strings.Replace(edited, "## @output\n", "## @output\nLista Markdown.\n", 1)
+	os.WriteFile(rel, []byte(edited), 0o644)
+	run(t, "new", "Vacio malo", "-w", ws)
+	_ = id
+
+	// Umbral bajo: pasa.
+	if out, err := run(t, "lint", "-w", ws, "--min-score", "50"); err != nil {
+		t.Fatalf("lint debía pasar: %v\n%s", err, out)
+	}
+	// Umbral alto: falla y señala al malo.
+	out, err := run(t, "lint", "-w", ws, "--min-score", "90")
+	if err == nil {
+		t.Fatalf("lint debía fallar:\n%s", out)
+	}
+	if !strings.Contains(out, "✗") || !strings.Contains(out, "vacio-malo.md") {
+		t.Fatalf("salida lint:\n%s", out)
+	}
+	// Archivo roto: siempre falla, con anotación GitHub.
+	os.WriteFile(filepath.Join(ws, "prompts", "roto.md"), []byte("basura"), 0o644)
+	out, err = run(t, "lint", "-w", ws, "--min-score", "0", "--format", "github")
+	if err == nil || !strings.Contains(out, "::error file=prompts/roto.md") {
+		t.Fatalf("anotación GitHub esperada: %v\n%s", err, out)
+	}
+}
+
+func TestGoldenSetAndCheck(t *testing.T) {
+	// Mock determinista y luego uno divergente.
+	stable := true
+	llm := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		text := "la capital de francia es paris y esta en europa"
+		if !stable {
+			text = "lunes martes miercoles jueves viernes sabado domingo enero"
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{{"message": map[string]string{"content": text}}},
+			"usage":   map[string]int{"prompt_tokens": 2, "completion_tokens": 8},
+		})
+	}))
+	defer llm.Close()
+	ws := t.TempDir()
+	run(t, "init", "-w", ws)
+	o, _ := run(t, "new", "Referencia", "-w", ws)
+	id := idRe.FindStringSubmatch(o)[1]
+	os.WriteFile(filepath.Join(ws, ".pes", "providers.yaml"),
+		[]byte("providers:\n  - {name: mock, type: openai, base_url: \""+llm.URL+"\", model: m}\n"), 0o644)
+
+	// check sin golden → error claro.
+	if _, err := run(t, "golden", "check", id, "-w", ws); err == nil ||
+		!strings.Contains(err.Error(), "golden set") {
+		t.Fatalf("check sin golden: %v", err)
+	}
+	// set + check estable → pasa.
+	if out, err := run(t, "golden", "set", id, "-w", ws); err != nil {
+		t.Fatalf("golden set: %v\n%s", err, out)
+	}
+	out, err := run(t, "golden", "check", id, "-w", ws)
+	if err != nil || !strings.Contains(out, "OK: sin regresión") {
+		t.Fatalf("check estable: %v\n%s", err, out)
+	}
+	// Respuesta divergente → regresión detectada.
+	stable = false
+	if _, err := run(t, "golden", "check", id, "-w", ws); err == nil ||
+		!strings.Contains(err.Error(), "REGRESIÓN") {
+		t.Fatalf("divergencia no detectada: %v", err)
+	}
+}
+
+func TestMCPCommandOverStdio(t *testing.T) {
+	ws := t.TempDir()
+	run(t, "init", "-w", ws)
+	run(t, "new", "Para agentes", "-w", ws)
+
+	root := Root()
+	var out strings.Builder
+	root.SetOut(&out)
+	root.SetIn(strings.NewReader(
+		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}` + "\n" +
+			`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_prompts","arguments":{}}}` + "\n"))
+	root.SetArgs([]string{"mcp", "-w", ws})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	if !strings.Contains(got, `"protocolVersion"`) || !strings.Contains(got, "Para agentes") {
+		t.Fatalf("mcp por stdio:\n%s", got)
+	}
+}

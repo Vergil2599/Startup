@@ -6,6 +6,8 @@ probar, versionar y reutilizar prompts para cualquier LLM, local o remoto.
 
 ## Estado: v1 lista para probar
 
+➡️ **[Guía de instalación paso a paso con todas las dependencias → INSTALL.md](INSTALL.md)**
+
 ```bash
 go build -o pes ./cmd/pes
 
@@ -32,6 +34,9 @@ puntuación 0–100 explicable, **vista previa** renderizada con variables,
 | `run -P proveedor` | Ejecuta contra Ollama / LM Studio / APIs OpenAI-compatibles (`.pes/providers.yaml`) |
 | `bench -n 5 -P a -P b` | Benchmark multi-modelo: p50/p95, tokens, fallos y **consistencia** entre repeticiones |
 | `duplicate` · `vars [set\|rm] [-p proyecto]` | Copiar prompts; gestionar variables globales o de proyecto |
+| `mcp` | **Servidor MCP**: expone tu biblioteca a Claude Code, Cursor y agentes (search/get/render/validate) |
+| `lint --min-score 70 --format github` | Valida TODO el workspace; gate para CI con anotaciones de GitHub |
+| `golden set\|check --threshold 0.6` | Respuesta de referencia por prompt y detección de regresiones (deriva) |
 | `optimize` | Sugerencias del sidecar `pes-ai` (opcional, nunca modifica el prompt) |
 | `export -f md\|txt\|json\|yaml\|html\|pdf` · `import` | Exportación e importación con round-trip |
 | `backup --passphrase X --keep N` | Backups tar.gz rotados, cifrado age opcional |

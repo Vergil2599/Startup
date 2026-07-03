@@ -18,9 +18,10 @@ import (
 // Version se fija en build time con -ldflags.
 var Version = "1.0.0"
 
-// registerV1 lo instala cli_v1.go en init(); indirección para mantener los
-// comandos v1 en su propio archivo.
+// registerV1 y registerIntegrations se instalan desde sus archivos en init();
+// indirección para mantener cada grupo de comandos en su propio archivo.
 var registerV1 func(root *cobra.Command, wsPath *string)
+var registerIntegrations func(root *cobra.Command, wsPath *string)
 
 // Root construye el árbol de comandos.
 func Root() *cobra.Command {
@@ -47,6 +48,9 @@ func Root() *cobra.Command {
 	)
 	if registerV1 != nil {
 		registerV1(root, &wsPath)
+	}
+	if registerIntegrations != nil {
+		registerIntegrations(root, &wsPath)
 	}
 	return root
 }
