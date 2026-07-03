@@ -38,6 +38,9 @@ func addV1Commands(root *cobra.Command, wsPath *string) {
 		cmdOptimize(wsPath),
 		cmdBackup(wsPath),
 		cmdPlugin(wsPath),
+		cmdDuplicate(wsPath),
+		cmdVars(wsPath),
+		cmdBench(wsPath),
 	)
 }
 

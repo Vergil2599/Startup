@@ -64,6 +64,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/prompts/{ref}/restore", s.restore)
 	mux.HandleFunc("GET /api/prompts/{ref}/runs", s.listRuns)
 	mux.HandleFunc("POST /api/prompts/{ref}/optimize", s.optimizePrompt)
+	mux.HandleFunc("POST /api/prompts/{ref}/duplicate", s.duplicatePrompt)
+	mux.HandleFunc("POST /api/bench", s.benchPrompt)
 	mux.HandleFunc("GET /api/search", s.search)
 	mux.HandleFunc("GET /api/diff", s.diffPrompts)
 	mux.HandleFunc("POST /api/compose", s.compose)
@@ -532,31 +534,9 @@ func (s *Server) runPrompt(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	cfgs, err := ai.LoadConfigs(s.studio.WS.Root)
+	targets, err := s.buildTargets(req.Providers)
 	if err != nil {
 		writeErr(w, err)
-		return
-	}
-	byName := map[string]ai.ProviderConfig{}
-	for _, c := range cfgs {
-		byName[c.Name] = c
-	}
-	var targets []run.Target
-	for _, name := range req.Providers {
-		cfg, ok := byName[name]
-		if !ok {
-			writeErr(w, fmt.Errorf("proveedor no configurado: %q", name))
-			return
-		}
-		p, berr := ai.Build(cfg)
-		if berr != nil {
-			writeErr(w, berr)
-			return
-		}
-		targets = append(targets, run.Target{Provider: p, Model: cfg.Model})
-	}
-	if len(targets) == 0 {
-		writeErr(w, fmt.Errorf("no se indicó ningún proveedor"))
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
@@ -569,6 +549,79 @@ func (s *Server) runPrompt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, results)
+}
+
+func (s *Server) duplicatePrompt(w http.ResponseWriter, r *http.Request) {
+	p, rel, err := s.studio.Duplicate(r.PathValue("ref"))
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, toDTO(&fsrepo.Entry{Prompt: p, Path: rel}))
+}
+
+func (s *Server) benchPrompt(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Ref         string   `json:"ref"`
+		Providers   []string `json:"providers"`
+		Reps        int      `json:"reps"`
+		Temperature float64  `json:"temperature"`
+	}
+	if !readJSON(w, r, &req) {
+		return
+	}
+	e, err := s.studio.Get(req.Ref)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	rendered, err := s.studio.Render(req.Ref, "", false)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	targets, err := s.buildTargets(req.Providers)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Minute)
+	defer cancel()
+	report, err := s.runner.Benchmark(ctx, e.Prompt.ID, rendered, targets,
+		run.Params{Temperature: req.Temperature}, req.Reps)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, report)
+}
+
+// buildTargets resuelve nombres de proveedor a targets ejecutables.
+func (s *Server) buildTargets(names []string) ([]run.Target, error) {
+	cfgs, err := ai.LoadConfigs(s.studio.WS.Root)
+	if err != nil {
+		return nil, err
+	}
+	byName := map[string]ai.ProviderConfig{}
+	for _, c := range cfgs {
+		byName[c.Name] = c
+	}
+	var targets []run.Target
+	for _, name := range names {
+		cfg, ok := byName[name]
+		if !ok {
+			return nil, fmt.Errorf("proveedor no configurado: %q", name)
+		}
+		p, berr := ai.Build(cfg)
+		if berr != nil {
+			return nil, berr
+		}
+		targets = append(targets, run.Target{Provider: p, Model: cfg.Model})
+	}
+	if len(targets) == 0 {
+		return nil, fmt.Errorf("no se indicó ningún proveedor")
+	}
+	return targets, nil
 }
 
 func (s *Server) listPlugins(w http.ResponseWriter, r *http.Request) {

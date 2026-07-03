@@ -62,13 +62,16 @@ type Entry struct {
 }
 
 // SavePrompt escribe un prompt. Si relPath es vacío se deriva de la carpeta
-// por defecto y el título. Devuelve la ruta relativa y el hash del contenido.
+// por defecto y el título, garantizando una ruta ÚNICA: si ya existe un
+// archivo con ese slug perteneciente a OTRO prompt, se añade sufijo -2, -3…
+// (jamás se sobrescribe el prompt de otro ID en silencio).
+// Devuelve la ruta relativa y el hash del contenido.
 func (w *Workspace) SavePrompt(p *domain.Prompt, relPath string) (string, string, error) {
 	if err := p.Validate(); err != nil {
 		return "", "", err
 	}
 	if relPath == "" {
-		relPath = filepath.Join(DirPrompts, Slug(p.Title)+".md")
+		relPath = w.uniquePromptPath(p)
 	}
 	if !strings.HasSuffix(relPath, ".md") {
 		relPath += ".md"
@@ -81,6 +84,26 @@ func (w *Workspace) SavePrompt(p *domain.Prompt, relPath string) (string, string
 		return "", "", err
 	}
 	return relPath, HashBytes(data), nil
+}
+
+// uniquePromptPath deriva prompts/<slug>.md evitando pisar archivos de otros
+// prompts: si la ruta está ocupada por un ID distinto, prueba slug-2, slug-3…
+func (w *Workspace) uniquePromptPath(p *domain.Prompt) string {
+	base := Slug(p.Title)
+	for i := 1; ; i++ {
+		name := base
+		if i > 1 {
+			name = fmt.Sprintf("%s-%d", base, i)
+		}
+		rel := filepath.Join(DirPrompts, name+".md")
+		data, err := os.ReadFile(filepath.Join(w.Root, rel))
+		if err != nil {
+			return rel // libre (o ilegible: rename fallará con error explícito)
+		}
+		if existing, perr := Parse(data); perr == nil && existing.ID == p.ID {
+			return rel // es el mismo prompt: sobrescribir es correcto
+		}
+	}
 }
 
 // LoadPrompt lee y parsea un prompt por su ruta relativa.
@@ -176,6 +199,12 @@ func (w *Workspace) LoadVariables(name string) (map[string]string, error) {
 		}
 	}
 	return out, nil
+}
+
+// HasVariables indica si existe el archivo de variables con ese nombre.
+func (w *Workspace) HasVariables(name string) bool {
+	_, err := os.Stat(filepath.Join(w.Root, DirVariables, name+".yaml"))
+	return err == nil
 }
 
 // SaveVariables persiste un conjunto de variables YAML.

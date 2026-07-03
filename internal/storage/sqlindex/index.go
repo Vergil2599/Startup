@@ -103,6 +103,21 @@ func (ix *Index) Upsert(e *fsrepo.Entry) error {
 	}
 	defer tx.Rollback()
 
+	// Si la ruta está ocupada por OTRO id (archivo reemplazado externamente,
+	// p. ej. git checkout), purgar la fila vieja para no violar UNIQUE(path).
+	var oldID string
+	var oldRowid int64
+	if err := tx.QueryRow("SELECT rowid, id FROM prompts WHERE path=?", e.Path).Scan(&oldRowid, &oldID); err == nil && oldID != string(p.ID) {
+		for _, q := range []string{"DELETE FROM prompts_fts WHERE rowid=?", "DELETE FROM prompts WHERE rowid=?"} {
+			if _, derr := tx.Exec(q, oldRowid); derr != nil {
+				return derr
+			}
+		}
+		if _, derr := tx.Exec("DELETE FROM tags WHERE prompt_id=?", oldID); derr != nil {
+			return derr
+		}
+	}
+
 	var rowid int64
 	err = tx.QueryRow("SELECT rowid FROM prompts WHERE id=?", string(p.ID)).Scan(&rowid)
 	switch err {

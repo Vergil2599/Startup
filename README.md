@@ -30,6 +30,8 @@ puntuación 0–100 explicable, **vista previa** renderizada con variables,
 | `snapshot` · `history` · `restore` | Versionado content-addressed; la historia nunca se reescribe |
 | `diff` · `compose` | Comparador estructural+texto; composición por capas (concat/replace) |
 | `run -P proveedor` | Ejecuta contra Ollama / LM Studio / APIs OpenAI-compatibles (`.pes/providers.yaml`) |
+| `bench -n 5 -P a -P b` | Benchmark multi-modelo: p50/p95, tokens, fallos y **consistencia** entre repeticiones |
+| `duplicate` · `vars [set\|rm] [-p proyecto]` | Copiar prompts; gestionar variables globales o de proyecto |
 | `optimize` | Sugerencias del sidecar `pes-ai` (opcional, nunca modifica el prompt) |
 | `export -f md\|txt\|json\|yaml\|html\|pdf` · `import` | Exportación e importación con round-trip |
 | `backup --passphrase X --keep N` | Backups tar.gz rotados, cifrado age opcional |
@@ -75,10 +77,19 @@ proveedor LLM de eco). Se colocan en `.pes/plugins/<id>/` y requieren
 ## Desarrollo
 
 ```bash
-go test ./...                                  # suite Go completa (~150 tests, incluye presupuestos)
+go test ./...                                  # suite Go completa (~170 tests, incluye presupuestos)
 go test -race -short ./...                     # con detector de carreras
 python3 -m unittest discover -s sidecar/tests  # tests del sidecar
+python3 scripts/ui_journey.py                  # E2E de la UI con Chromium real (requiere `pes ui` en :8822)
 ```
+
+La v1 pasó una ronda de **pruebas exploratorias simulando usuarios reales**
+(novato, usuario de Obsidian con ediciones externas, power user, entradas
+hostiles, concurrencia CLI+UI y una jornada completa en navegador real con
+Playwright). Los 5 bugs encontrados —colisión de slugs con pérdida de datos,
+import con ID duplicado, índice roto tras reemplazo externo de archivos,
+errores de indexado anónimos y typos silenciosos en variables de proyecto—
+están corregidos con tests de regresión en `internal/core/regression_test.go`.
 
 Nota de implementación v1: la UI de escritorio se sirve como web local embebida
 en el binario (`pes ui`); el shell Wails previsto en el diseño la envolverá en

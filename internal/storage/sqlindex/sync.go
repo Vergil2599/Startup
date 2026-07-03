@@ -15,6 +15,17 @@ type SyncStats struct {
 	Removed int // borrados externamente
 	Skipped int // sin cambios (mtime o hash iguales)
 	Errors  int // archivos ilegibles
+	// ErrorDetails identifica qué falló y por qué (máximo maxErrorDetails).
+	ErrorDetails []string
+}
+
+const maxErrorDetails = 10
+
+func (s *SyncStats) addError(path string, err error) {
+	s.Errors++
+	if len(s.ErrorDetails) < maxErrorDetails {
+		s.ErrorDetails = append(s.ErrorDetails, path+": "+err.Error())
+	}
 }
 
 // Sync reindexa incrementalmente el workspace. Los archivos cuyo mtime no ha
@@ -44,7 +55,7 @@ func (ix *Index) Sync(ws *fsrepo.Workspace) (SyncStats, error) {
 
 		info, ierr := d.Info()
 		if ierr != nil {
-			stats.Errors++
+			stats.addError(rel, ierr)
 			return nil
 		}
 		idxMtime, idxHash, ok, serr := ix.Stale(rel)
@@ -54,7 +65,7 @@ func (ix *Index) Sync(ws *fsrepo.Workspace) (SyncStats, error) {
 		}
 		e, lerr := ws.LoadPrompt(rel)
 		if lerr != nil {
-			stats.Errors++
+			stats.addError(rel, lerr)
 			return nil
 		}
 		if ok && idxHash == e.ContentHash {
@@ -66,7 +77,7 @@ func (ix *Index) Sync(ws *fsrepo.Workspace) (SyncStats, error) {
 			}
 		}
 		if uerr := ix.Upsert(e); uerr != nil {
-			stats.Errors++
+			stats.addError(rel, uerr)
 			return nil
 		}
 		stats.Indexed++
@@ -78,7 +89,7 @@ func (ix *Index) Sync(ws *fsrepo.Workspace) (SyncStats, error) {
 	for path := range indexed {
 		if !seen[path] {
 			if rerr := ix.Remove(path); rerr != nil {
-				stats.Errors++
+				stats.addError(path, rerr)
 				continue
 			}
 			stats.Removed++

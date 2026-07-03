@@ -121,6 +121,11 @@ func (s *Studio) Vars(project string) (domain.VariableSet, error) {
 	}
 	vs := domain.VariableSet{Global: global}
 	if project != "" {
+		// Un nombre de proyecto explícito que no existe es casi seguro un
+		// typo: fallar claro en vez de renderizar con variables vacías.
+		if !s.WS.HasVariables(project) {
+			return domain.VariableSet{}, fmt.Errorf("no existe variables/%s.yaml en el workspace", project)
+		}
 		proj, err := s.WS.LoadVariables(project)
 		if err != nil {
 			return domain.VariableSet{}, err
@@ -177,10 +182,15 @@ func (s *Studio) Export(ref, format, project string) ([]byte, string, error) {
 }
 
 // Import convierte datos externos en un prompt del workspace.
+// Si el ID importado ya existe (reimportar un export propio), se asigna un ID
+// nuevo: importar crea SIEMPRE un prompt adicional, nunca reemplaza uno.
 func (s *Studio) Import(data []byte, title string) (*domain.Prompt, string, error) {
 	p, err := importer.Import(data, title)
 	if err != nil {
 		return nil, "", err
+	}
+	if _, exists := s.WS.FindByID(p.ID); exists == nil {
+		p.ID = domain.NewID()
 	}
 	if p.CreatedAt.IsZero() {
 		now := time.Now().UTC().Truncate(time.Second)
@@ -194,6 +204,38 @@ func (s *Studio) Import(data []byte, title string) (*domain.Prompt, string, erro
 		return nil, "", err
 	}
 	return p, rel, nil
+}
+
+// Duplicate crea una copia independiente de un prompt (ID nuevo, "(copia)").
+func (s *Studio) Duplicate(ref string) (*domain.Prompt, string, error) {
+	e, err := s.Get(ref)
+	if err != nil {
+		return nil, "", err
+	}
+	src := e.Prompt
+	now := time.Now().UTC().Truncate(time.Second)
+	dup := &domain.Prompt{
+		ID: domain.NewID(), Title: src.Title + " (copia)",
+		Description: src.Description, Category: src.Category,
+		TemplateID: src.TemplateID, Schema: domain.SchemaVersion,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	dup.Tags = append([]string(nil), src.Tags...)
+	dup.Blocks = append([]domain.Block(nil), src.Blocks...)
+	if src.Variables != nil {
+		dup.Variables = map[string]string{}
+		for k, v := range src.Variables {
+			dup.Variables[k] = v
+		}
+	}
+	rel, _, err := s.WS.SavePrompt(dup, "")
+	if err != nil {
+		return nil, "", err
+	}
+	if _, err := s.Index.Sync(s.WS); err != nil {
+		return nil, "", err
+	}
+	return dup, rel, nil
 }
 
 // Search busca en el índice full-text.

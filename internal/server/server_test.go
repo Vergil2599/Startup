@@ -291,3 +291,51 @@ func TestBadJSONIs400(t *testing.T) {
 		t.Fatalf("JSON roto: %d", resp.StatusCode)
 	}
 }
+
+func TestDuplicateEndpoint(t *testing.T) {
+	srv, _ := newTestServer(t)
+	var p promptDTO
+	call(t, srv, "POST", "/api/prompts", map[string]any{"title": "Original único"}, &p)
+	var dup promptDTO
+	call(t, srv, "POST", "/api/prompts/"+p.ID+"/duplicate", map[string]any{}, &dup)
+	if dup.ID == p.ID || dup.Title != "Original único (copia)" {
+		t.Fatalf("duplicate: %+v", dup)
+	}
+	var hits []map[string]any
+	call(t, srv, "GET", "/api/prompts", nil, &hits)
+	if len(hits) != 2 {
+		t.Fatalf("biblioteca: %d", len(hits))
+	}
+}
+
+func TestBenchEndpoint(t *testing.T) {
+	srv, studio := newTestServer(t)
+	llm := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{{"message": map[string]string{"content": "misma respuesta estable"}}},
+			"usage":   map[string]int{"prompt_tokens": 3, "completion_tokens": 3},
+		})
+	}))
+	defer llm.Close()
+	cfg := fmt.Sprintf("providers:\n  - {name: mock, type: openai, base_url: %q, model: m1}\n", llm.URL)
+	os.WriteFile(filepath.Join(studio.WS.Root, ".pes", "providers.yaml"), []byte(cfg), 0o644)
+
+	var p promptDTO
+	call(t, srv, "POST", "/api/prompts", map[string]any{"title": "Benchmarkable"}, &p)
+	var report struct {
+		Summaries []struct {
+			Provider    string  `json:"provider"`
+			Reps        int     `json:"reps"`
+			Consistency float64 `json:"consistency"`
+		} `json:"summaries"`
+	}
+	call(t, srv, "POST", "/api/bench", map[string]any{
+		"ref": p.ID, "providers": []string{"mock"}, "reps": 3,
+	}, &report)
+	if len(report.Summaries) != 1 || report.Summaries[0].Reps != 3 {
+		t.Fatalf("bench: %+v", report)
+	}
+	if report.Summaries[0].Consistency != 1.0 {
+		t.Fatalf("respuestas idénticas → consistencia 1.0: %v", report.Summaries[0].Consistency)
+	}
+}

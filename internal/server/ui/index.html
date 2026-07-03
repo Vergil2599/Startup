@@ -74,6 +74,7 @@ th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--border)} th
 <aside id="sidebar">
   <header>
     <h1>⚡ PES</h1>
+    <button class="small" id="varsBtn" title="Variables globales">{x}</button>
     <button class="small" id="themeBtn" title="Cambiar tema">◐</button>
     <button class="small primary" id="newBtn" title="Nuevo prompt (Ctrl+N)">+ Nuevo</button>
   </header>
@@ -84,6 +85,16 @@ th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--border)} th
   </footer>
 </aside>
 <main id="main"><div class="empty"><h2>Prompt Engineering Studio</h2><p>Selecciona un prompt o crea uno nuevo.</p></div></main>
+
+<dialog id="varsDlg">
+  <h3 style="margin-top:0">Variables globales</h3>
+  <div id="varsRows"></div>
+  <p style="display:flex;gap:8px"><input id="varNew" placeholder="nombre_snake_case"><input id="varNewVal" placeholder="valor"><button class="small" id="varAdd">+</button></p>
+  <p style="display:flex;gap:8px;justify-content:flex-end">
+    <button onclick="varsDlg.close()">Cerrar</button>
+    <button class="primary" id="varsSave">Guardar</button>
+  </p>
+</dialog>
 
 <dialog id="newDlg">
   <h3 style="margin-top:0">Nuevo prompt</h3>
@@ -178,6 +189,7 @@ function render(){
       <option value="clipboard">→ portapapeles</option>
     </select>
     ${aiAvailable?'<button id="optBtn">✨ Optimizar</button>':'<button disabled title="pes-ai no instalado (opcional)">✨ IA no disponible</button>'}
+    <button class="small" id="dupBtn" title="Duplicar">⧉</button>
     <button class="small" id="delBtn" title="Eliminar">🗑</button>
   </div>
   <div class="meta-grid">
@@ -194,6 +206,7 @@ function render(){
   $('#tagsIn').oninput=e=>{current.tags=e.target.value.split(',').map(s=>s.trim()).filter(Boolean);scheduleSave()};
   $('#favBtn').onclick=()=>{current.favorite=!current.favorite;scheduleSave();render()};
   $('#delBtn').onclick=async()=>{ if(confirm('¿Eliminar «'+current.title+'»?')){ await api('DELETE','/prompts/'+current.id); current=null; render(); refreshList(); } };
+  $('#dupBtn').onclick=async()=>{ const d=await api('POST','/prompts/'+current.id+'/duplicate',{}); await refreshList(); openPrompt(d.id); };
   $('#exportSel').onchange=async e=>{ const f=e.target.value; e.target.value=''; if(!f) return; await doExport(f); };
   const ob=$('#optBtn'); if(ob) ob.onclick=optimize;
   ({builder:renderBuilder,preview:renderPreview,historial:renderHistory,runner:renderRunner,diff:renderDiff,composer:renderComposer})[view]();
@@ -206,7 +219,8 @@ function renderBuilder(){
   const avail=BLOCK_TYPES.filter(t=>!current.blocks.some(b=>b.type===t));
   box.innerHTML=current.blocks.map((b,i)=>`
     <div class="block ${b.enabled?'':'off'}" data-i="${i}">
-      <header>
+      <header draggable="true">
+        <span class="drag" title="Arrastra para reordenar" style="cursor:grab">≡</span>
         <span class="name">${esc(b.type.replaceAll('_',' '))}</span>
         <button class="small" data-act="up" title="Subir (Alt+↑)">↑</button>
         <button class="small" data-act="down" title="Bajar">↓</button>
@@ -232,6 +246,20 @@ function renderBuilder(){
   const sel=$('#addBlockSel');
   if(sel) sel.onchange=e=>{ if(!e.target.value) return;
     current.blocks.push({type:e.target.value,enabled:true,content:''}); scheduleSave(); renderBuilder(); };
+  // Drag & drop de bloques (con equivalente de teclado en ↑/↓).
+  let dragFrom=null;
+  box.querySelectorAll('.block header').forEach(h=>{
+    h.addEventListener('dragstart',e=>{ dragFrom=+h.closest('.block').dataset.i; e.dataTransfer.effectAllowed='move'; });
+    h.addEventListener('dragover',e=>e.preventDefault());
+    h.addEventListener('drop',e=>{
+      e.preventDefault();
+      const to=+h.closest('.block').dataset.i;
+      if(dragFrom===null||dragFrom===to) return;
+      const [moved]=current.blocks.splice(dragFrom,1);
+      current.blocks.splice(to,0,moved);
+      dragFrom=null; scheduleSave(); renderBuilder();
+    });
+  });
 }
 
 // ── Preview ──
@@ -266,6 +294,8 @@ async function renderRunner(){
     <div class="toolbar">
       ${provs.map(p=>`<label><input type="checkbox" class="provCk" value="${esc(p.name)}"> ${esc(p.name)} <span class="muted">(${esc(p.model)})</span></label>`).join('')}
       <span class="grow"></span>
+      <label class="muted">reps <input id="benchReps" type="number" value="3" min="2" max="20" style="width:60px"></label>
+      <button id="benchBtn">📊 Benchmark</button>
       <button class="primary" id="runBtn">▶ Ejecutar</button>
     </div>
     <div id="runOut"></div>
@@ -285,6 +315,20 @@ async function renderRunner(){
       $('#runOut').innerHTML='<div class="row">'+res.map(r=>`
         <div class="col"><h4>${esc(r.provider)} <span class="muted">${r.latency_ms}ms · ${r.tokens_in}/${r.tokens_out} tok</span></h4>
         <pre class="preview">${r.error?'⚠ '+esc(r.error):esc(r.response)}</pre></div>`).join('')+'</div>';
+    }catch(e){ $('#runOut').innerHTML='<p class="finding error">'+esc(e.message)+'</p>'; }
+  };
+  const bb=$('#benchBtn');
+  if(bb) bb.onclick=async()=>{
+    const sel=[...document.querySelectorAll('.provCk:checked')].map(c=>c.value);
+    if(!sel.length) return alert('Marca al menos un proveedor');
+    const reps=+$('#benchReps').value||3;
+    $('#runOut').innerHTML='<p class="muted"><span class="spin">◌</span> benchmark: '+reps+' reps × '+sel.length+' proveedores…</p>';
+    try{
+      const rep=await api('POST','/bench',{ref:current.id,providers:sel,reps});
+      $('#runOut').innerHTML='<h4>Benchmark</h4><table><tr><th>proveedor</th><th>modelo</th><th>reps</th><th>fallos</th><th>p50</th><th>p95</th><th>tok/resp</th><th>consistencia</th></tr>'+
+        rep.summaries.map(s=>`<tr><td>${esc(s.provider)}</td><td>${esc(s.model)}</td><td>${s.reps}</td><td>${s.failures}</td>
+        <td>${s.latency_p50_ms}ms</td><td>${s.latency_p95_ms}ms</td><td>${s.tokens_out_avg.toFixed(1)}</td>
+        <td>${s.consistency<0?'n/a':(s.consistency*100).toFixed(0)+'%'}</td></tr>`).join('')+'</table>';
     }catch(e){ $('#runOut').innerHTML='<p class="finding error">'+esc(e.message)+'</p>'; }
   };
 }
@@ -370,6 +414,29 @@ async function optimize(){
     });
   }catch(e){ $('#optBox').innerHTML='<p class="finding error">'+esc(e.message)+'</p>'; }
 }
+
+// ── Variables globales ──
+const varsDlg=$('#varsDlg');
+let varsData={};
+function renderVarRows(){
+  $('#varsRows').innerHTML=Object.keys(varsData).sort().map(k=>`
+    <p style="display:flex;gap:8px;align-items:center">
+      <code style="min-width:160px">${esc(k)}</code>
+      <input data-var="${esc(k)}" value="${esc(varsData[k])}">
+      <button class="small" data-vrm="${esc(k)}">✕</button></p>`).join('')||'<p class="muted">Sin variables.</p>';
+  document.querySelectorAll('[data-var]').forEach(i=>i.oninput=e=>varsData[e.target.dataset.var]=e.target.value);
+  document.querySelectorAll('[data-vrm]').forEach(b=>b.onclick=()=>{delete varsData[b.dataset.vrm];renderVarRows()});
+}
+$('#varsBtn').onclick=async()=>{ varsData=await api('GET','/variables'); renderVarRows(); varsDlg.showModal(); };
+$('#varAdd').onclick=()=>{
+  const k=$('#varNew').value.trim(), v=$('#varNewVal').value;
+  if(!/^[a-z][a-z0-9_]*$/.test(k)) return alert('nombre inválido: usa snake_case');
+  varsData[k]=v; $('#varNew').value=''; $('#varNewVal').value=''; renderVarRows();
+};
+$('#varsSave').onclick=async()=>{
+  try{ await api('PUT','/variables',varsData); varsDlg.close(); if(current) render(); }
+  catch(e){ alert(e.message); }
+};
 
 // ── Nuevo prompt ──
 const newDlg=$('#newDlg');

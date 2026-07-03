@@ -173,3 +173,63 @@ extension_points = ["llm.provider"]
 		t.Fatalf("enable no reflejado:\n%s", out)
 	}
 }
+
+func TestDuplicateAndVarsCommands(t *testing.T) {
+	ws := t.TempDir()
+	run(t, "init", "-w", ws)
+	o, _ := run(t, "new", "Para copiar", "-w", ws)
+	id := idRe.FindStringSubmatch(o)[1]
+
+	out, err := run(t, "duplicate", id, "-w", ws)
+	if err != nil || !strings.Contains(out, "duplicado") {
+		t.Fatalf("duplicate: %v\n%s", err, out)
+	}
+	if lst, _ := run(t, "list", "-w", ws); !strings.Contains(lst, "(copia)") {
+		t.Fatalf("copia no listada: %s", lst)
+	}
+
+	// vars set / list / rm (global y por proyecto)
+	if out, err := run(t, "vars", "set", "language", "Go", "-w", ws); err != nil {
+		t.Fatalf("vars set: %v\n%s", err, out)
+	}
+	run(t, "vars", "set", "db", "sqlite", "-w", ws, "-p", "miproyecto")
+	out, _ = run(t, "vars", "-w", ws)
+	if !strings.Contains(out, "language") || strings.Contains(out, "db") {
+		t.Fatalf("vars global: %s", out)
+	}
+	out, _ = run(t, "vars", "-w", ws, "-p", "miproyecto")
+	if !strings.Contains(out, "db") {
+		t.Fatalf("vars proyecto: %s", out)
+	}
+	if _, err := run(t, "vars", "set", "Mal-Nombre", "x", "-w", ws); err == nil {
+		t.Fatal("nombre inválido debe fallar")
+	}
+	run(t, "vars", "rm", "language", "-w", ws)
+	out, _ = run(t, "vars", "-w", ws)
+	if strings.Contains(out, "language") {
+		t.Fatalf("rm no eliminó: %s", out)
+	}
+	if _, err := run(t, "vars", "rm", "inexistente", "-w", ws); err == nil {
+		t.Fatal("rm de variable inexistente debe fallar")
+	}
+}
+
+func TestBenchCommand(t *testing.T) {
+	llm := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{{"message": map[string]string{"content": "estable"}}},
+			"usage":   map[string]int{"prompt_tokens": 1, "completion_tokens": 1},
+		})
+	}))
+	defer llm.Close()
+	ws := t.TempDir()
+	run(t, "init", "-w", ws)
+	o, _ := run(t, "new", "Bench", "-w", ws)
+	id := idRe.FindStringSubmatch(o)[1]
+	os.WriteFile(filepath.Join(ws, ".pes", "providers.yaml"),
+		[]byte("providers:\n  - {name: mock, type: openai, base_url: \""+llm.URL+"\", model: m}\n"), 0o644)
+	out, err := run(t, "bench", id, "-w", ws, "-n", "3")
+	if err != nil || !strings.Contains(out, "consistencia") || !strings.Contains(out, "1.00") {
+		t.Fatalf("bench: %v\n%s", err, out)
+	}
+}

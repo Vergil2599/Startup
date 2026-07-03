@@ -318,6 +318,9 @@ func cmdReindex(wsPath *string) *cobra.Command {
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "indexados=%d sin_cambios=%d purgados=%d errores=%d\n",
 				stats.Indexed, stats.Skipped, stats.Removed, stats.Errors)
+			for _, d := range stats.ErrorDetails {
+				fmt.Fprintf(cmd.OutOrStdout(), "  ✗ %s\n", d)
+			}
 			return nil
 		},
 	}
