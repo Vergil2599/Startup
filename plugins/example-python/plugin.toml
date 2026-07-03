@@ -1,0 +1,15 @@
+[plugin]
+id = "dev.pes.example-python"
+name = "Ejemplo Python (regla de validación + provider de eco)"
+version = "0.1.0"
+api = "1"
+entry = ["python3", "main.py"]
+
+[capabilities]
+# Este plugin no necesita disco ni red.
+fs_read = []
+fs_write = []
+network = []
+
+[contributes]
+extension_points = ["validation.rule", "llm.provider"]

@@ -16,7 +16,11 @@ import (
 )
 
 // Version se fija en build time con -ldflags.
-var Version = "0.1.0-dev"
+var Version = "1.0.0"
+
+// registerV1 lo instala cli_v1.go en init(); indirección para mantener los
+// comandos v1 en su propio archivo.
+var registerV1 func(root *cobra.Command, wsPath *string)
 
 // Root construye el árbol de comandos.
 func Root() *cobra.Command {
@@ -41,6 +45,9 @@ func Root() *cobra.Command {
 		cmdImport(&wsPath),
 		cmdReindex(&wsPath),
 	)
+	if registerV1 != nil {
+		registerV1(root, &wsPath)
+	}
 	return root
 }
 
@@ -71,7 +78,11 @@ func cmdInit(wsPath *string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "workspace inicializado en %s\n", ws.Root)
+			n, err := installStarterTemplates(ws.Root)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "workspace inicializado en %s (%d plantillas de inicio)\n", ws.Root, n)
 			return nil
 		},
 	}

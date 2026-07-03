@@ -24,5 +24,8 @@ jobs:
       - name: Presupuestos de rendimiento (solo Linux)
         if: matrix.os == 'ubuntu-latest'
         run: go test -run TestPerf10kBudget -v ./internal/storage/sqlindex/
+      - name: Tests del sidecar Python
+        if: matrix.os != 'windows-latest'
+        run: python3 -m unittest discover -s sidecar/tests
       - name: Build
         run: go build ./cmd/pes

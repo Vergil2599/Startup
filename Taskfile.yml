@@ -16,6 +16,14 @@ tasks:
     desc: Suite completa (incluye presupuestos de rendimiento)
     cmds:
       - go test ./...
+      - python3 -m unittest discover -s sidecar/tests
+
+  ui:
+    desc: Compila y lanza la UI web local sobre ./demo-ws
+    cmds:
+      - task: build
+      - ./{{.BIN}} init -w demo-ws
+      - ./{{.BIN}} ui -w demo-ws
 
   test:short:
     desc: Suite rápida (sin presupuestos de rendimiento)

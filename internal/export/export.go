@@ -58,7 +58,7 @@ func Formats() []string {
 }
 
 func init() {
-	for _, c := range []Codec{mdCodec{}, txtCodec{}, jsonCodec{}, yamlCodec{}} {
+	for _, c := range []Codec{mdCodec{}, txtCodec{}, jsonCodec{}, yamlCodec{}, htmlCodec{}, pdfCodec{}} {
 		if err := Register(c); err != nil {
 			panic(err)
 		}

@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prompt Engineering Studio</title>
+<style>
+:root{
+  --bg:#fafaf8; --panel:#ffffff; --fg:#1a1c22; --muted:#6b6f76; --border:#e5e5e2;
+  --accent:#4f46e5; --accent-soft:#eef0ff; --ok:#16a34a; --warn:#d97706; --err:#dc2626;
+  --mono:'JetBrains Mono',ui-monospace,Menlo,monospace; --radius:10px;
+}
+[data-theme=dark]{
+  --bg:#1b1d23; --panel:#22252d; --fg:#e8e9ec; --muted:#9aa0aa; --border:#333741;
+  --accent:#818cf8; --accent-soft:#2b2e44; --ok:#4ade80; --warn:#fbbf24; --err:#f87171;
+}
+*{box-sizing:border-box} html,body{height:100%}
+body{margin:0;font:14px/1.5 -apple-system,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--fg);display:flex}
+button{font:inherit;cursor:pointer;border:1px solid var(--border);background:var(--panel);color:var(--fg);border-radius:8px;padding:6px 12px}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.small{padding:2px 8px;font-size:12px}
+input,textarea,select{font:inherit;color:var(--fg);background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:7px 10px;width:100%}
+textarea{font-family:var(--mono);font-size:13px;resize:vertical;min-height:70px}
+input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-offset:-1px}
+#sidebar{width:290px;min-width:290px;border-right:1px solid var(--border);background:var(--panel);display:flex;flex-direction:column;height:100vh}
+#sidebar header{padding:14px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center}
+#sidebar h1{font-size:15px;margin:0;flex:1}
+#search{margin:10px 14px 4px;width:calc(100% - 28px)}
+#promptList{flex:1;overflow-y:auto;padding:8px}
+.item{padding:8px 10px;border-radius:8px;cursor:pointer;display:flex;gap:8px;align-items:center}
+.item:hover{background:var(--accent-soft)} .item.active{background:var(--accent-soft);outline:1px solid var(--accent)}
+.item .t{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.score{font-size:11px;font-weight:700;min-width:30px;text-align:center;border-radius:10px;padding:1px 5px}
+.s-hi{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.s-mid{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.s-lo{background:color-mix(in srgb,var(--err) 18%,transparent);color:var(--err)}
+#main{flex:1;height:100vh;overflow-y:auto;padding:20px 26px}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.toolbar .grow{flex:1}
+.block{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px;overflow:hidden}
+.block.off{opacity:.55}
+.block header{display:flex;gap:8px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border)}
+.block header .name{font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);flex:1}
+.block textarea{border:none;border-radius:0;width:100%;background:transparent}
+.badge{display:inline-flex;align-items:center;gap:6px;font-weight:700;border-radius:20px;padding:4px 14px;font-size:15px}
+.findings{margin:10px 0}
+.finding{padding:8px 12px;border-left:3px solid var(--muted);background:var(--panel);border-radius:0 8px 8px 0;margin-bottom:6px;font-size:13px}
+.finding.error{border-color:var(--err)} .finding.warn{border-color:var(--warn)} .finding.info{border-color:var(--muted)}
+.finding .sug{color:var(--muted)}
+.row{display:flex;gap:14px} .col{flex:1;min-width:0}
+pre.preview{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:14px;white-space:pre-wrap;font-family:var(--mono);font-size:13px}
+.meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.muted{color:var(--muted);font-size:12px}
+.tag{display:inline-block;background:var(--accent-soft);color:var(--accent);border-radius:6px;padding:1px 7px;font-size:11px;margin-right:4px}
+.empty{color:var(--muted);text-align:center;margin-top:16vh}
+.empty h2{font-weight:600}
+dialog{background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:12px;padding:20px;min-width:420px;max-width:90vw}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--border)} th{color:var(--muted);font-weight:600}
+.dop{font-family:var(--mono);font-size:12.5px;white-space:pre-wrap;padding:1px 8px;border-radius:4px}
+.dop.add{background:color-mix(in srgb,var(--ok) 14%,transparent)} .dop.del{background:color-mix(in srgb,var(--err) 14%,transparent)}
+.tabs{display:flex;gap:4px;margin-bottom:12px;border-bottom:1px solid var(--border)}
+.tabs button{border:none;background:none;border-radius:8px 8px 0 0;padding:8px 14px}
+.tabs button.on{color:var(--accent);border-bottom:2px solid var(--accent);font-weight:600}
+.layer{display:flex;gap:8px;align-items:center;padding:6px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:var(--panel)}
+.spin{display:inline-block;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){ .spin{animation:none} }
+</style>
+</head>
+<body>
+<aside id="sidebar">
+  <header>
+    <h1>⚡ PES</h1>
+    <button class="small" id="themeBtn" title="Cambiar tema">◐</button>
+    <button class="small primary" id="newBtn" title="Nuevo prompt (Ctrl+N)">+ Nuevo</button>
+  </header>
+  <input id="search" placeholder="Buscar…  ( / )" autocomplete="off">
+  <div id="promptList"></div>
+  <footer style="padding:10px 14px;border-top:1px solid var(--border)" class="muted">
+    <span id="statusLine">cargando…</span>
+  </footer>
+</aside>
+<main id="main"><div class="empty"><h2>Prompt Engineering Studio</h2><p>Selecciona un prompt o crea uno nuevo.</p></div></main>
+
+<dialog id="newDlg">
+  <h3 style="margin-top:0">Nuevo prompt</h3>
+  <p><input id="newTitle" placeholder="Título"></p>
+  <p><input id="newTags" placeholder="tags separados por coma"></p>
+  <p><select id="newTpl"><option value="">— sin plantilla —</option></select></p>
+  <p style="display:flex;gap:8px;justify-content:flex-end">
+    <button onclick="newDlg.close()">Cancelar</button>
+    <button class="primary" id="newOk">Crear</button>
+  </p>
+</dialog>
+
+<script>
+'use strict';
+const $=s=>document.querySelector(s);
+const api=async(method,path,body)=>{
+  const r=await fetch('/api'+path,{method,headers:{'Content-Type':'application/json'},
+    body:body===undefined?undefined:JSON.stringify(body)});
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(data.error||r.statusText);
+  return data;
+};
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// ── Estado ──
+let prompts=[], current=null, saveTimer=null, view='builder', aiAvailable=false;
+
+// ── Tema ──
+const applyTheme=t=>{document.documentElement.dataset.theme=t;localStorage.pesTheme=t};
+applyTheme(localStorage.pesTheme||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'));
+$('#themeBtn').onclick=()=>applyTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');
+
+// ── Biblioteca ──
+async function refreshList(q){
+  prompts=q? await api('GET','/search?q='+encodeURIComponent(q)) : await api('GET','/prompts');
+  const list=$('#promptList'); list.innerHTML='';
+  for(const h of prompts){
+    const div=document.createElement('div');
+    div.className='item'+(current&&h.ID===current.id?' active':'');
+    const sc=h.Score==null?'':`<span class="score ${h.Score>=80?'s-hi':h.Score>=50?'s-mid':'s-lo'}">${h.Score}</span>`;
+    div.innerHTML=`${h.Favorite?'★':''}<span class="t">${esc(h.Title)}</span>${sc}`;
+    div.onclick=()=>openPrompt(h.ID);
+    list.appendChild(div);
+  }
+  $('#statusLine').textContent=`${prompts.length} prompts · ${aiAvailable?'IA disponible':'modo offline puro'}`;
+}
+$('#search').oninput=e=>refreshList(e.target.value.trim());
+
+// ── Abrir/guardar prompt ──
+async function openPrompt(ref){ current=await api('GET','/prompts/'+ref); view='builder'; render(); refreshList($('#search').value.trim()); }
+function scheduleSave(){
+  clearTimeout(saveTimer);
+  $('#saveState')&&($('#saveState').textContent='…');
+  saveTimer=setTimeout(async()=>{
+    try{
+      current=await api('PUT','/prompts/'+current.id,current);
+      $('#saveState')&&($('#saveState').textContent='guardado ✓');
+      validateLive();
+    }catch(e){ $('#saveState')&&($('#saveState').textContent='error: '+e.message); }
+  },500);
+}
+async function validateLive(){
+  if(!current) return;
+  try{
+    const rep=await api('POST','/prompts/'+current.id+'/validate',{});
+    const el=$('#scoreBadge');
+    if(el){ el.textContent=rep.Score+'/100';
+      el.className='badge '+(rep.Score>=80?'s-hi':rep.Score>=50?'s-mid':'s-lo'); }
+    const fl=$('#findings');
+    if(fl){ fl.innerHTML=rep.Findings.map(f=>
+      `<div class="finding ${f.Severity}"><b>${f.Severity}</b> ${f.BlockType?`[${esc(f.BlockType)}]`:''} ${esc(f.Message)}
+       ${f.Suggestion?`<div class="sug">→ ${esc(f.Suggestion)}</div>`:''}</div>`).join('')||'<p class="muted">Sin hallazgos 🎉</p>'; }
+    refreshList($('#search').value.trim());
+  }catch(e){}
+}
+
+// ── Render principal ──
+const BLOCK_TYPES=['role','objective','context','background','constraints','rules','workflow','input','output','examples','failure_conditions','success_criteria','notes'];
+function render(){
+  if(!current){ $('#main').innerHTML='<div class="empty"><h2>Prompt Engineering Studio</h2><p>Selecciona un prompt o crea uno nuevo.</p></div>'; return; }
+  const tabs=['builder','preview','historial','runner','diff','composer'];
+  $('#main').innerHTML=`
+  <div class="toolbar">
+    <input id="titleIn" value="${esc(current.title)}" style="font-size:17px;font-weight:600;max-width:420px">
+    <button class="small" id="favBtn">${current.favorite?'★':'☆'}</button>
+    <span id="scoreBadge" class="badge">–</span>
+    <span class="grow"></span>
+    <span class="muted" id="saveState"></span>
+    <select id="exportSel" style="width:auto">
+      <option value="">Exportar…</option>
+      <option>md</option><option>txt</option><option>json</option><option>yaml</option><option>html</option><option>pdf</option>
+      <option value="clipboard">→ portapapeles</option>
+    </select>
+    ${aiAvailable?'<button id="optBtn">✨ Optimizar</button>':'<button disabled title="pes-ai no instalado (opcional)">✨ IA no disponible</button>'}
+    <button class="small" id="delBtn" title="Eliminar">🗑</button>
+  </div>
+  <div class="meta-grid">
+    <input id="descIn" placeholder="Descripción" value="${esc(current.description)}">
+    <input id="tagsIn" placeholder="tags separados por coma" value="${esc(current.tags.join(', '))}">
+  </div>
+  <div class="tabs">${tabs.map(t=>`<button data-tab="${t}" class="${view===t?'on':''}">${t}</button>`).join('')}</div>
+  <div id="viewBox"></div>
+  <div id="optBox"></div>
+  <h3 style="margin-top:22px">Validación</h3><div class="findings" id="findings"></div>`;
+  document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{view=b.dataset.tab;render()});
+  $('#titleIn').oninput=e=>{current.title=e.target.value;scheduleSave()};
+  $('#descIn').oninput=e=>{current.description=e.target.value;scheduleSave()};
+  $('#tagsIn').oninput=e=>{current.tags=e.target.value.split(',').map(s=>s.trim()).filter(Boolean);scheduleSave()};
+  $('#favBtn').onclick=()=>{current.favorite=!current.favorite;scheduleSave();render()};
+  $('#delBtn').onclick=async()=>{ if(confirm('¿Eliminar «'+current.title+'»?')){ await api('DELETE','/prompts/'+current.id); current=null; render(); refreshList(); } };
+  $('#exportSel').onchange=async e=>{ const f=e.target.value; e.target.value=''; if(!f) return; await doExport(f); };
+  const ob=$('#optBtn'); if(ob) ob.onclick=optimize;
+  ({builder:renderBuilder,preview:renderPreview,historial:renderHistory,runner:renderRunner,diff:renderDiff,composer:renderComposer})[view]();
+  validateLive();
+}
+
+// ── Builder ──
+function renderBuilder(){
+  const box=$('#viewBox');
+  const avail=BLOCK_TYPES.filter(t=>!current.blocks.some(b=>b.type===t));
+  box.innerHTML=current.blocks.map((b,i)=>`
+    <div class="block ${b.enabled?'':'off'}" data-i="${i}">
+      <header>
+        <span class="name">${esc(b.type.replaceAll('_',' '))}</span>
+        <button class="small" data-act="up" title="Subir (Alt+↑)">↑</button>
+        <button class="small" data-act="down" title="Bajar">↓</button>
+        <button class="small" data-act="toggle">${b.enabled?'on':'off'}</button>
+        <button class="small" data-act="rm">✕</button>
+      </header>
+      <textarea data-i="${i}" placeholder="Contenido del bloque… usa {{variables}}">${esc(b.content)}</textarea>
+    </div>`).join('')+
+    (avail.length?`<p><select id="addBlockSel" style="width:auto"><option value="">+ Añadir bloque…</option>${avail.map(t=>`<option>${t}</option>`).join('')}</select></p>`:'');
+  box.querySelectorAll('textarea').forEach(ta=>{
+    ta.oninput=e=>{current.blocks[+e.target.dataset.i].content=e.target.value;scheduleSave()};
+  });
+  box.querySelectorAll('button[data-act]').forEach(btn=>{
+    btn.onclick=()=>{
+      const i=+btn.closest('.block').dataset.i, act=btn.dataset.act, bl=current.blocks;
+      if(act==='toggle') bl[i].enabled=!bl[i].enabled;
+      if(act==='rm') bl.splice(i,1);
+      if(act==='up'&&i>0) [bl[i-1],bl[i]]=[bl[i],bl[i-1]];
+      if(act==='down'&&i<bl.length-1) [bl[i+1],bl[i]]=[bl[i],bl[i+1]];
+      scheduleSave(); renderBuilder();
+    };
+  });
+  const sel=$('#addBlockSel');
+  if(sel) sel.onchange=e=>{ if(!e.target.value) return;
+    current.blocks.push({type:e.target.value,enabled:true,content:''}); scheduleSave(); renderBuilder(); };
+}
+
+// ── Preview ──
+async function renderPreview(){
+  const r=await api('POST','/prompts/'+current.id+'/render',{strict:false});
+  $('#viewBox').innerHTML=`${r.warning?`<p class="muted">⚠ ${esc(r.warning)}</p>`:''}
+    <pre class="preview">${esc(r.text)||'<span class="muted">(vacío)</span>'}</pre>`;
+}
+
+// ── Historial ──
+async function renderHistory(){
+  const vs=await api('GET','/prompts/'+current.id+'/history');
+  $('#viewBox').innerHTML=`
+    <p><button class="primary" id="snapBtn">📸 Crear versión</button></p>
+    <table><tr><th>#</th><th>fecha</th><th>comentario</th><th></th></tr>
+    ${vs.slice().reverse().map(v=>`<tr><td>v${v.Seq}</td><td>${new Date(v.CreatedAt).toLocaleString()}</td>
+      <td>${esc(v.Comment)}</td><td><button class="small" data-seq="${v.Seq}">restaurar</button></td></tr>`).join('')}
+    </table>${vs.length?'':'<p class="muted">Sin versiones todavía.</p>'}`;
+  $('#snapBtn').onclick=async()=>{ const c=prompt('Comentario de la versión:')||'';
+    await api('POST','/prompts/'+current.id+'/snapshot',{comment:c}); renderHistory(); };
+  document.querySelectorAll('[data-seq]').forEach(b=>b.onclick=async()=>{
+    await api('POST','/prompts/'+current.id+'/restore',{version:String(b.dataset.seq)});
+    current=await api('GET','/prompts/'+current.id); render();
+  });
+}
+
+// ── Runner ──
+async function renderRunner(){
+  const provs=await api('GET','/providers');
+  const runs=await api('GET','/prompts/'+current.id+'/runs');
+  $('#viewBox').innerHTML= provs.length? `
+    <div class="toolbar">
+      ${provs.map(p=>`<label><input type="checkbox" class="provCk" value="${esc(p.name)}"> ${esc(p.name)} <span class="muted">(${esc(p.model)})</span></label>`).join('')}
+      <span class="grow"></span>
+      <button class="primary" id="runBtn">▶ Ejecutar</button>
+    </div>
+    <div id="runOut"></div>
+    <h4>Ejecuciones anteriores</h4>${runsTable(runs)}`
+   : `<p class="muted">No hay proveedores configurados. Crea <code>.pes/providers.yaml</code> en tu workspace:</p>
+      <pre class="preview">providers:
+  - {name: ollama-local, type: ollama, base_url: "http://localhost:11434", model: llama3}
+  - {name: lmstudio, type: openai, base_url: "http://localhost:1234", model: qwen2.5}</pre>
+      <h4>Ejecuciones anteriores</h4>${runsTable(runs)}`;
+  const rb=$('#runBtn');
+  if(rb) rb.onclick=async()=>{
+    const sel=[...document.querySelectorAll('.provCk:checked')].map(c=>c.value);
+    if(!sel.length) return alert('Marca al menos un proveedor');
+    $('#runOut').innerHTML='<p class="muted"><span class="spin">◌</span> ejecutando…</p>';
+    try{
+      const res=await api('POST','/run',{ref:current.id,providers:sel});
+      $('#runOut').innerHTML='<div class="row">'+res.map(r=>`
+        <div class="col"><h4>${esc(r.provider)} <span class="muted">${r.latency_ms}ms · ${r.tokens_in}/${r.tokens_out} tok</span></h4>
+        <pre class="preview">${r.error?'⚠ '+esc(r.error):esc(r.response)}</pre></div>`).join('')+'</div>';
+    }catch(e){ $('#runOut').innerHTML='<p class="finding error">'+esc(e.message)+'</p>'; }
+  };
+}
+const runsTable=runs=>runs.length?`<table><tr><th>fecha</th><th>proveedor</th><th>lat.</th><th>tokens</th><th>estado</th></tr>
+  ${runs.map(r=>`<tr><td>${new Date(r.created_at).toLocaleString()}</td><td>${esc(r.provider)}</td>
+   <td>${r.latency_ms}ms</td><td>${r.tokens_in}/${r.tokens_out}</td><td>${r.error?'⚠':'✓'}</td></tr>`).join('')}</table>`
+  :'<p class="muted">Ninguna todavía.</p>';
+
+// ── Diff ──
+async function renderDiff(){
+  const opts=prompts.map(h=>`<option value="${h.ID}" ${h.ID===current.id?'selected':''}>${esc(h.Title)}</option>`).join('');
+  $('#viewBox').innerHTML=`
+    <div class="toolbar">
+      <select id="diffA" style="width:auto">${opts}</select> →
+      <select id="diffB" style="width:auto">${opts}</select>
+      <button class="primary" id="diffBtn">Comparar</button>
+    </div><div id="diffOut"></div>`;
+  $('#diffBtn').onclick=async()=>{
+    const d=await api('GET',`/diff?a=${$('#diffA').value}&b=${$('#diffB').value}`);
+    const st=d.structural;
+    $('#diffOut').innerHTML=`
+      <p>${st.Equal?'Idénticos.':''} palabras: ${st.WordsA} → ${st.WordsB} ${st.TitleDiff?'· título distinto':''}</p>
+      <p>${st.Blocks.map(b=>`<span class="tag">${esc(b.Type)}: ${b.Kind}</span>`).join('')||''}</p>
+      <pre class="preview">${(d.text_ops||[]).map(o=>`<div class="dop ${o.Kind}">${o.Kind==='add'?'+':o.Kind==='del'?'−':' '} ${esc(o.Line)}</div>`).join('')}</pre>`;
+  };
+}
+
+// ── Composer ──
+let layers=[];
+async function renderComposer(){
+  const opts=h=>prompts.map(p=>`<option value="${p.ID}" ${p.ID===h?'selected':''}>${esc(p.Title)}</option>`).join('');
+  $('#viewBox').innerHTML=`
+    <p class="muted">Apila capas (la primera es la base) y materializa un prompt nuevo.</p>
+    <div id="layerBox">${layers.map((l,i)=>`
+      <div class="layer"><span class="muted">${i+1}</span>
+        <select data-i="${i}" style="width:auto;flex:1">${opts(l.ref)}</select>
+        <label><input type="checkbox" data-ck="${i}" ${l.enabled?'checked':''}> activa</label>
+        <button class="small" data-rm="${i}">✕</button></div>`).join('')}</div>
+    <p><button id="addLayer">+ capa</button></p>
+    <div class="toolbar">
+      <input id="compTitle" placeholder="Título del prompt resultante" style="max-width:340px">
+      <select id="compStrat" style="width:auto"><option value="concat">concat</option><option value="replace">replace</option></select>
+      <button class="primary" id="compBtn">⚙ Materializar</button>
+    </div>`;
+  $('#addLayer').onclick=()=>{ layers.push({ref:prompts[0]?.ID||'',enabled:true}); renderComposer(); };
+  document.querySelectorAll('#layerBox select').forEach(s=>s.onchange=e=>layers[+e.target.dataset.i].ref=e.target.value);
+  document.querySelectorAll('[data-ck]').forEach(c=>c.onchange=e=>layers[+e.target.dataset.ck].enabled=e.target.checked);
+  document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{layers.splice(+b.dataset.rm,1);renderComposer()});
+  $('#compBtn').onclick=async()=>{
+    try{
+      const p=await api('POST','/compose',{title:$('#compTitle').value||'Composición',strategy:$('#compStrat').value,layers});
+      layers=[]; await refreshList(); openPrompt(p.id);
+    }catch(e){ alert(e.message); }
+  };
+}
+
+// ── Export / Optimize ──
+async function doExport(format){
+  if(format==='clipboard'){
+    const r=await api('POST','/prompts/'+current.id+'/render',{strict:false});
+    await navigator.clipboard.writeText(r.text);
+    $('#saveState').textContent='copiado al portapapeles ✓'; return;
+  }
+  const r=await api('POST','/prompts/'+current.id+'/export',{format});
+  const bytes=Uint8Array.from(atob(r.data_base64),c=>c.charCodeAt(0));
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([bytes]));
+  a.download=current.title.toLowerCase().replace(/[^a-z0-9]+/g,'-')+r.extension;
+  a.click(); URL.revokeObjectURL(a.href);
+}
+async function optimize(){
+  $('#optBox').innerHTML='<p class="muted"><span class="spin">◌</span> analizando…</p>';
+  try{
+    const sugs=await api('POST','/prompts/'+current.id+'/optimize',{});
+    $('#optBox').innerHTML='<h3>Sugerencias ✨ <span class="muted">(nunca se aplican solas)</span></h3>'+
+      (sugs.map((s,i)=>`<div class="finding warn"><b>${esc(s.kind)}</b> [${esc(s.block_type)}] ${esc(s.message)}
+        ${s.replacement?`<div><button class="small" data-apply="${i}">aplicar reemplazo</button></div>`:''}
+        ${s.replacement_hint?`<div class="sug">→ ${esc(s.replacement_hint)}</div>`:''}</div>`).join('')||'<p class="muted">Nada que sugerir 🎉</p>');
+    document.querySelectorAll('[data-apply]').forEach(b=>b.onclick=()=>{
+      const s=sugs[+b.dataset.apply];
+      const blk=current.blocks.find(x=>x.type===s.block_type);
+      if(blk){ blk.content=s.replacement; scheduleSave(); view='builder'; render(); }
+    });
+  }catch(e){ $('#optBox').innerHTML='<p class="finding error">'+esc(e.message)+'</p>'; }
+}
+
+// ── Nuevo prompt ──
+const newDlg=$('#newDlg');
+$('#newBtn').onclick=async()=>{
+  const tpls=await api('GET','/templates');
+  $('#newTpl').innerHTML='<option value="">— sin plantilla —</option>'+
+    tpls.map(t=>`<option value="${t.id}">${esc(t.title)} ${t.category?'('+esc(t.category)+')':''}</option>`).join('');
+  $('#newTitle').value=''; $('#newTags').value=''; newDlg.showModal(); $('#newTitle').focus();
+};
+$('#newOk').onclick=async()=>{
+  const title=$('#newTitle').value.trim(); if(!title) return;
+  try{
+    const p=await api('POST','/prompts',{title,tags:$('#newTags').value.split(',').map(s=>s.trim()).filter(Boolean),template_id:$('#newTpl').value});
+    newDlg.close(); await refreshList(); openPrompt(p.id);
+  }catch(e){ alert(e.message); }
+};
+
+// ── Atajos ──
+addEventListener('keydown',e=>{
+  if(e.key==='/'&&document.activeElement.tagName!=='INPUT'&&document.activeElement.tagName!=='TEXTAREA'){e.preventDefault();$('#search').focus();}
+  if(e.ctrlKey&&e.key==='n'){e.preventDefault();$('#newBtn').click();}
+  if(e.ctrlKey&&e.key==='s'&&current){e.preventDefault();api('POST','/prompts/'+current.id+'/snapshot',{comment:'manual'}).then(()=>$('#saveState').textContent='versión creada ✓');}
+});
+
+// ── Init ──
+(async()=>{
+  const h=await api('GET','/health'); aiAvailable=h.ai_available;
+  await refreshList();
+})();
+</script>
+</body>
+</html>

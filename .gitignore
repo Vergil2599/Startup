@@ -14,3 +14,4 @@ coverage.html
 # SO / editores
 .DS_Store
 *.swp
+/demo-ws/
