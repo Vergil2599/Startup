@@ -15,3 +15,7 @@ coverage.html
 .DS_Store
 *.swp
 /demo-ws/
+
+# Python
+__pycache__/
+*.pyc
